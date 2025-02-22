@@ -1,1 +1,70 @@
-Google Cloud Function http and python script call to get stock and menu information 
+--Google Cloud Function http and python script call to get stock and menu information 
+
+--Deploy the Cloud Function:
+gcloud functions deploy retrieve_data \
+  --runtime python39 \
+  --trigger-http \
+  --allow-unauthenticated
+
+--Cloud Scheduler Job
+gcloud scheduler jobs create http data_retrieval_job \
+  --schedule="0 */6 * * *" \
+  --uri="[YOUR_FUNCTION_URL]" \
+  --http-method=POST
+
+
+--Scheduled GCP Function for Data Retrieval
+import functions_framework
+from google.cloud import storage
+import pandas as pd
+from datetime import datetime
+import json
+
+@functions_framework.http
+def retrieve_data(request):
+    """
+    Cloud Function to retrieve data and store it in GCS.
+    Triggered by Cloud Scheduler via HTTP.
+    
+    Returns:
+        dict: Status of the operation
+    """
+    try:
+        # Initialize GCS client
+        storage_client = storage.Client()
+        bucket_name = "your-bucket-name"
+        bucket = storage_client.bucket(bucket_name)
+
+        # Your data retrieval logic here
+        # Example: Getting data from an API or database
+        data = {
+            "timestamp": datetime.now().isoformat(),
+            "metrics": {
+                "value1": 100,
+                "value2": 200
+            }
+        }
+
+        # Create a blob with timestamp in name
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        blob_name = f"data/raw/data_{timestamp}.json"
+        blob = bucket.blob(blob_name)
+
+        # Upload the data
+        blob.upload_from_string(
+            json.dumps(data),
+            content_type="application/json"
+        )
+
+        return {
+            "status": "success",
+            "message": f"Data retrieved and stored in {blob_name}",
+            "timestamp": timestamp
+        }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
